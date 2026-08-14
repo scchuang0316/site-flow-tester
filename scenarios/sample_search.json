@@ -1,0 +1,39 @@
+{
+  "id": "scenario_wikipedia_search",
+  "title": "Wikipedia 多步驟導覽與搜尋斷言測試",
+  "target_url": "https://www.wikipedia.org",
+  "headless": true,
+  "browser_type": "chromium",
+  "steps": [
+    {
+      "id": "step_1",
+      "name": "造訪 Wikipedia 首頁",
+      "action": "goto",
+      "value": "https://www.wikipedia.org",
+      "timeout": 15000
+    },
+    {
+      "id": "step_2",
+      "name": "輸入搜尋關鍵字 'Python'",
+      "action": "fill",
+      "selector": "input#searchInput",
+      "value": "Python",
+      "timeout": 5000
+    },
+    {
+      "id": "step_3",
+      "name": "點擊搜尋按鈕",
+      "action": "click",
+      "selector": "button[type='submit']",
+      "timeout": 5000
+    },
+    {
+      "id": "step_4",
+      "name": "驗證頁面包含 Python 標題",
+      "action": "assert_text",
+      "selector": "h1#firstHeading, h1",
+      "value": "Python",
+      "timeout": 10000
+    }
+  ]
+}

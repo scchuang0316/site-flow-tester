@@ -1,0 +1,54 @@
+{
+  "id": "scenario_httpbin_form",
+  "title": "HTTPBin 表單填寫與回應斷言測試",
+  "target_url": "https://httpbin.org/forms/post",
+  "headless": true,
+  "browser_type": "chromium",
+  "steps": [
+    {
+      "id": "step_1",
+      "name": "造訪 HTTPBin 表單頁面",
+      "action": "goto",
+      "value": "https://httpbin.org/forms/post",
+      "timeout": 10000
+    },
+    {
+      "id": "step_2",
+      "name": "輸入顧客姓名",
+      "action": "fill",
+      "selector": "input[name='custname']",
+      "value": "測試員 Antigravity",
+      "timeout": 5000
+    },
+    {
+      "id": "step_3",
+      "name": "輸入電話號碼",
+      "action": "fill",
+      "selector": "input[name='custtel']",
+      "value": "0912345678",
+      "timeout": 5000
+    },
+    {
+      "id": "step_4",
+      "name": "點擊大尺寸披薩選項",
+      "action": "click",
+      "selector": "input[value='large']",
+      "timeout": 5000
+    },
+    {
+      "id": "step_5",
+      "name": "送出表單",
+      "action": "click",
+      "selector": "button",
+      "timeout": 5000
+    },
+    {
+      "id": "step_6",
+      "name": "驗證伺服器回應包含輸入姓名",
+      "action": "assert_text",
+      "selector": "body",
+      "value": "Antigravity",
+      "timeout": 10000
+    }
+  ]
+}

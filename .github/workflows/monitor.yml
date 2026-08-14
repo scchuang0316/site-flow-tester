@@ -1,0 +1,34 @@
+name: 網站 7x24 健康巡檢與操作測試
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # 每 30 分鐘自動執行一次
+  workflow_dispatch: # 支援在 GitHub 介面上手動點擊觸發
+
+jobs:
+  test-and-monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 檢出程式碼
+        uses: actions/checkout@v3
+
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: 安裝依賴套件與 Playwright 瀏覽器
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: 執行網站操作與斷言測試
+        run: |
+          python cli.py scenarios/sample_search.json
+
+      - name: 保存測試報告與截圖 Artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports
+          path: reports/
