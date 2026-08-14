@@ -38,22 +38,22 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function detectApiBaseUrl() {
-    try {
-        const res = await fetch("/api/scenarios");
-        if (res.ok && res.headers.get("content-type")?.includes("application/json")) {
-            apiBaseUrl = "";
-            return true;
-        }
-    } catch (e) {}
+    // 1. If running on local server directly
+    if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
+        apiBaseUrl = "";
+        return true;
+    }
 
+    // 2. If running on Cloudflare Pages, try connecting to local Python FastAPI backend
     try {
         const res = await fetch("http://127.0.0.1:8000/api/scenarios");
-        if (res.ok && res.headers.get("content-type")?.includes("application/json")) {
+        if (res.ok) {
             apiBaseUrl = "http://127.0.0.1:8000";
             return true;
         }
     } catch (e) {}
 
+    apiBaseUrl = "";
     return false;
 }
 
@@ -63,7 +63,8 @@ async function loadPresets() {
 
     if (hasBackend) {
         try {
-            const res = await fetch(`${apiBaseUrl}/api/scenarios`);
+            const fetchUrl = apiBaseUrl ? `${apiBaseUrl}/api/scenarios` : "/api/scenarios";
+            const res = await fetch(fetchUrl);
             if (res.ok && res.headers.get("content-type")?.includes("application/json")) {
                 scenarios = await res.json();
             }
@@ -73,7 +74,7 @@ async function loadPresets() {
     } else {
         const consoleBox = document.getElementById("tabConsole");
         if (consoleBox) {
-            consoleBox.innerHTML = '<div class="log-line warn">[提示] 目前為 Cloudflare Pages 靜態預覽模式。欲執行 Playwright 實時測試，請確保本機 FastAPI 服務 (http://127.0.0.1:8000) 已啟動。</div>';
+            consoleBox.innerHTML = '<div class="log-line warn">[提示] 目前正在 Cloudflare Pages 雲端靜態模式下預覽儀表板。如需點擊「啟動測試偵測」執行 Playwright 自動化測試，請確認本機 Python FastAPI 服務 (http://127.0.0.1:8000) 已啟動。</div>';
         }
     }
 
@@ -183,6 +184,13 @@ async function runScenario() {
         return;
     }
 
+    const hasBackend = await detectApiBaseUrl();
+
+    if (!hasBackend && window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost") {
+        alert("【未連線到測試引擎】\n\n您目前正在 Cloudflare Pages 雲端靜態模式下檢視儀表板。\n由於 Playwright 無頭瀏覽器需要 Python 引擎環境，請確保您的本機測試服務已啟動：\n\n/Users/i_scchuang/site_flow_tester/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000");
+        return;
+    }
+
     const payload = {
         id: "run_" + Date.now(),
         title: title || "自訂測試",
@@ -202,7 +210,6 @@ async function runScenario() {
     document.getElementById("tabNetwork").innerHTML = "";
     document.getElementById("viewReportBtn").style.display = "none";
 
-    const hasBackend = await detectApiBaseUrl();
     const targetHost = apiBaseUrl || window.location.origin;
 
     // WebSocket attempt
@@ -241,13 +248,17 @@ async function runScenario() {
 
 async function fallbackToHttpRun(payload, targetHost) {
     try {
-        const res = await fetch(`${targetHost}/api/run`, {
+        const runUrl = targetHost ? `${targetHost}/api/run` : "/api/run";
+        const res = await fetch(runUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
 
         if (!res.ok) {
+            if (res.status === 405) {
+                throw new Error("Cloudflare Pages 靜態節點不支援 POST 請求。請確認 Python FastAPI 後端服務 (http://127.0.0.1:8000) 已啟動。");
+            }
             const text = await res.text();
             throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
         }
