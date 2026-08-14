@@ -1,41 +1,106 @@
 let currentSteps = [];
 let presetsMap = {};
+let apiBaseUrl = "";
+
+const BUILTIN_PRESETS = [
+    {
+        id: "scenario_wikipedia_search",
+        title: "Wikipedia 多步驟導覽與搜尋斷言測試",
+        target_url: "https://www.wikipedia.org",
+        headless: true,
+        browser_type: "chromium",
+        steps: [
+            { id: "step_1", name: "造訪 Wikipedia 首頁", action: "goto", value: "https://www.wikipedia.org", timeout: 15000 },
+            { id: "step_2", name: "輸入搜尋關鍵字 'Python'", action: "fill", selector: "input#searchInput", value: "Python", timeout: 5000 },
+            { id: "step_3", name: "點擊搜尋按鈕", action: "click", selector: "button[type='submit']", timeout: 5000 },
+            { id: "step_4", name: "驗證頁面包含 Python 標題", action: "assert_text", selector: "h1#firstHeading, h1", value: "Python", timeout: 10000 }
+        ]
+    },
+    {
+        id: "scenario_httpbin_form",
+        title: "HTTPBin 表單填寫與回應斷言測試",
+        target_url: "https://httpbin.org/forms/post",
+        headless: true,
+        browser_type: "chromium",
+        steps: [
+            { id: "step_1", name: "造訪 HTTPBin 表單頁面", action: "goto", value: "https://httpbin.org/forms/post", timeout: 10000 },
+            { id: "step_2", name: "輸入顧客姓名", action: "fill", selector: "input[name='custname']", value: "測試員 Antigravity", timeout: 5000 },
+            { id: "step_3", name: "輸入電話號碼", action: "fill", selector: "input[name='custtel']", value: "0912345678", timeout: 5000 },
+            { id: "step_4", name: "點擊大尺寸披薩選項", action: "click", selector: "input[value='large']", timeout: 5000 },
+            { id: "step_5", name: "送出表單", action: "click", selector: "button", timeout: 5000 },
+            { id: "step_6", name: "驗證伺服器回應包含輸入姓名", action: "assert_text", selector: "body", value: "Antigravity", timeout: 10000 }
+        ]
+    }
+];
 
 document.addEventListener("DOMContentLoaded", () => {
     loadPresets();
 });
 
-async function loadPresets() {
+async function detectApiBaseUrl() {
     try {
         const res = await fetch("/api/scenarios");
-        const scenarios = await res.json();
-        const select = document.getElementById("presetSelect");
-        select.innerHTML = '<option value="">-- 自訂新情境 --</option>';
-
-        scenarios.forEach(sc => {
-            presetsMap[sc.id] = sc;
-            const opt = document.createElement("option");
-            opt.value = sc.id;
-            opt.textContent = sc.title;
-            select.appendChild(opt);
-        });
-
-        select.addEventListener("change", (e) => {
-            const scId = e.target.value;
-            if (scId && presetsMap[scId]) {
-                applyScenario(presetsMap[scId]);
-            } else {
-                currentSteps = [];
-                renderSteps();
-            }
-        });
-
-        if (scenarios.length > 0) {
-            select.value = scenarios[0].id;
-            applyScenario(scenarios[0]);
+        if (res.ok && res.headers.get("content-type")?.includes("application/json")) {
+            apiBaseUrl = "";
+            return true;
         }
-    } catch (err) {
-        console.error("Failed to load presets:", err);
+    } catch (e) {}
+
+    try {
+        const res = await fetch("http://127.0.0.1:8000/api/scenarios");
+        if (res.ok && res.headers.get("content-type")?.includes("application/json")) {
+            apiBaseUrl = "http://127.0.0.1:8000";
+            return true;
+        }
+    } catch (e) {}
+
+    return false;
+}
+
+async function loadPresets() {
+    const hasBackend = await detectApiBaseUrl();
+    let scenarios = BUILTIN_PRESETS;
+
+    if (hasBackend) {
+        try {
+            const res = await fetch(`${apiBaseUrl}/api/scenarios`);
+            if (res.ok && res.headers.get("content-type")?.includes("application/json")) {
+                scenarios = await res.json();
+            }
+        } catch (err) {
+            console.warn("Using built-in presets fallback:", err);
+        }
+    } else {
+        const consoleBox = document.getElementById("tabConsole");
+        if (consoleBox) {
+            consoleBox.innerHTML = '<div class="log-line warn">[提示] 目前為 Cloudflare Pages 靜態預覽模式。欲執行 Playwright 實時測試，請確保本機 FastAPI 服務 (http://127.0.0.1:8000) 已啟動。</div>';
+        }
+    }
+
+    const select = document.getElementById("presetSelect");
+    select.innerHTML = '<option value="">-- 自訂新情境 --</option>';
+
+    scenarios.forEach(sc => {
+        presetsMap[sc.id] = sc;
+        const opt = document.createElement("option");
+        opt.value = sc.id;
+        opt.textContent = sc.title;
+        select.appendChild(opt);
+    });
+
+    select.addEventListener("change", (e) => {
+        const scId = e.target.value;
+        if (scId && presetsMap[scId]) {
+            applyScenario(presetsMap[scId]);
+        } else {
+            currentSteps = [];
+            renderSteps();
+        }
+    });
+
+    if (scenarios.length > 0) {
+        select.value = scenarios[0].id;
+        applyScenario(scenarios[0]);
     }
 }
 
@@ -137,50 +202,72 @@ async function runScenario() {
     document.getElementById("tabNetwork").innerHTML = "";
     document.getElementById("viewReportBtn").style.display = "none";
 
-    const loc = window.location;
-    const wsProtocol = loc.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProtocol}//${loc.host}/ws/run-scenario`;
+    const hasBackend = await detectApiBaseUrl();
+    const targetHost = apiBaseUrl || window.location.origin;
 
-    const ws = new WebSocket(wsUrl);
+    // WebSocket attempt
+    let wsHost = targetHost.replace(/^http/, "ws");
+    const wsUrl = `${wsHost}/ws/run-scenario`;
 
-    ws.onopen = () => {
-        ws.send(JSON.stringify(payload));
-    };
+    try {
+        const ws = new WebSocket(wsUrl);
 
-    ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "step_progress") {
-            appendStepCard(msg.result);
-        } else if (msg.type === "completed") {
-            finishRun(msg.result, msg.html_report);
-        } else if (msg.type === "error") {
-            alert("測試發生錯誤: " + msg.message);
-            document.getElementById("statStatus").textContent = "異常 Error";
-            document.getElementById("statStatus").className = "stat-value val-fail";
-            document.getElementById("runBtn").disabled = false;
-            document.getElementById("liveSpinner").style.display = "none";
+        ws.onopen = () => {
+            ws.send(JSON.stringify(payload));
+        };
+
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "step_progress") {
+                appendStepCard(msg.result);
+            } else if (msg.type === "completed") {
+                finishRun(msg.result, msg.html_report);
+            } else if (msg.type === "error") {
+                alert("測試發生錯誤: " + msg.message);
+                document.getElementById("statStatus").textContent = "異常 Error";
+                document.getElementById("statStatus").className = "stat-value val-fail";
+                document.getElementById("runBtn").disabled = false;
+                document.getElementById("liveSpinner").style.display = "none";
+            }
+        };
+
+        ws.onerror = async () => {
+            fallbackToHttpRun(payload, targetHost);
+        };
+    } catch (e) {
+        fallbackToHttpRun(payload, targetHost);
+    }
+}
+
+async function fallbackToHttpRun(payload, targetHost) {
+    try {
+        const res = await fetch(`${targetHost}/api/run`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
         }
-    };
 
-    ws.onerror = async () => {
-        // Fallback to HTTP POST if WebSocket fails
-        console.warn("WebSocket fallback to HTTP POST");
-        try {
-            const res = await fetch("/api/run", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-            const result = await res.json();
-            document.getElementById("liveGrid").innerHTML = "";
-            result.step_results.forEach(sr => appendStepCard(sr));
-            finishRun(result, `/reports/report_${result.scenario_id}_${Math.floor(result.start_time)}.html`);
-        } catch (e) {
-            alert("執行失敗: " + e);
-            document.getElementById("runBtn").disabled = false;
-            document.getElementById("liveSpinner").style.display = "none";
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+            throw new Error("伺服器並未回傳 JSON 格式。請確認 Python FastAPI 後端服務 (http://127.0.0.1:8000) 已啟動。");
         }
-    };
+
+        const result = await res.json();
+        document.getElementById("liveGrid").innerHTML = "";
+        result.step_results.forEach(sr => appendStepCard(sr));
+        finishRun(result, `${targetHost}/reports/report_${result.scenario_id}_${Math.floor(result.start_time)}.html`);
+    } catch (e) {
+        alert("執行失敗: " + e.message);
+        document.getElementById("statStatus").textContent = "未連線";
+        document.getElementById("statStatus").className = "stat-value val-fail";
+        document.getElementById("runBtn").disabled = false;
+        document.getElementById("liveSpinner").style.display = "none";
+    }
 }
 
 function appendStepCard(res) {
@@ -192,8 +279,9 @@ function appendStepCard(res) {
     card.className = `live-step-card ${statusClass}`;
     
     let imgContent = '<div style="color: var(--text-dim); font-size: 12px;">無截圖</div>';
+    const reportHost = apiBaseUrl || "";
     if (res.screenshot_path) {
-        imgContent = `<img src="/reports/${res.screenshot_path}" onclick="window.open('/reports/${res.screenshot_path}')">`;
+        imgContent = `<img src="${reportHost}/reports/${res.screenshot_path}" onclick="window.open('${reportHost}/reports/${res.screenshot_path}')">`;
     }
 
     let errToast = '';

@@ -11,7 +11,17 @@ from core.models import ScenarioConfig, ScenarioResult, StepConfig, ActionType
 from core.engine import SiteTesterEngine
 from core.reporter import Reporter
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="SiteFlowTester - Web Operations Testing Tool")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCENARIOS_DIR = os.path.join(BASE_DIR, "scenarios")
