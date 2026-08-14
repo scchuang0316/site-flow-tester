@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SiteFlowTester - 網站自動化流程與異常監控儀表板</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="navbar">
+        <div class="brand">
+            <i class="fa-solid fa-microchip brand-icon" style="color: #60a5fa;"></i>
+            <span class="brand-title">SiteFlowTester v1.0</span>
+        </div>
+        <div class="nav-status">
+            <span><i class="fa-solid fa-server" style="color: #10b981;"></i> Python Playwright Core</span>
+            <a href="#" id="viewReportBtn" target="_blank" style="display: none; color: #60a5fa; text-decoration: none;">
+                <i class="fa-solid fa-file-invoice"></i> 查看完整 HTML 報告
+            </a>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar: Scenario Builder -->
+        <div class="sidebar">
+            <div class="section-title">
+                <span>選擇預設情境</span>
+                <i class="fa-solid fa-list-check"></i>
+            </div>
+            <select id="presetSelect" class="preset-select">
+                <option value="">-- 自訂新情境 --</option>
+            </select>
+
+            <div class="section-title">情境基本設定</div>
+            <div class="form-group">
+                <label>情境標題</label>
+                <input type="text" id="scenarioTitle" class="form-control" value="自訂網站流程測試">
+            </div>
+            <div class="form-group">
+                <label>目標網站 URL</label>
+                <input type="text" id="targetUrl" class="form-control" value="https://httpbin.org/forms/post">
+            </div>
+            <div class="form-group" style="display: flex; gap: 12px;">
+                <div style="flex: 1;">
+                    <label>瀏覽器種類</label>
+                    <select id="browserType" class="form-control">
+                        <option value="chromium">Chromium</option>
+                        <option value="firefox">Firefox</option>
+                        <option value="webkit">WebKit (Safari)</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label>無頭模式 (Headless)</label>
+                    <select id="headlessSelect" class="form-control">
+                        <option value="true">開啟 (背景執行)</option>
+                        <option value="false">關閉 (顯示瀏覽器)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-title">
+                <span>操作步驟列表</span>
+                <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 12px;" onclick="addStepItem()">
+                    <i class="fa-solid fa-plus"></i> 新增步驟
+                </button>
+            </div>
+
+            <div id="stepsList" class="steps-list">
+                <!-- Step items will be injected dynamically -->
+            </div>
+
+            <div class="action-buttons">
+                <button id="runBtn" class="btn btn-primary" style="width: 100%;" onclick="runScenario()">
+                    <i class="fa-solid fa-play"></i> 啟動測試偵測
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Summary Stats -->
+            <div class="summary-banner">
+                <div class="stat-box">
+                    <span class="stat-label">執行狀態</span>
+                    <span id="statStatus" class="stat-value val-blue">就緒 (Ready)</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">總步驟耗時</span>
+                    <span id="statDuration" class="stat-value">0 ms</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">成功 / 失敗步驟</span>
+                    <span id="statSteps" class="stat-value">0 / 0</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Console / Network 警報</span>
+                    <span id="statAlerts" class="stat-value">0 / 0</span>
+                </div>
+            </div>
+
+            <!-- Live Progress Grid -->
+            <div class="console-panel">
+                <div class="panel-header">
+                    <span class="panel-title"><i class="fa-solid fa-desktop"></i> 即時步驟與截圖預覽 (Live Execution)</span>
+                    <span id="liveSpinner" style="display: none; color: var(--accent-blue);">
+                        <i class="fa-solid fa-spinner fa-spin"></i> 測試進行中...
+                    </span>
+                </div>
+                <div id="liveGrid" class="live-steps-grid">
+                    <div style="color: var(--text-dim); font-size: 14px; grid-column: 1 / -1; padding: 40px; text-align: center;">
+                        點擊左側「啟動測試偵測」開始模擬瀏覽器互動並即時顯示結果
+                    </div>
+                </div>
+            </div>
+
+            <!-- Diagnostics Logs & Exception Waterfall -->
+            <div class="console-panel" style="flex-grow: 0; min-height: 220px;">
+                <div class="tab-header">
+                    <button class="tab-btn active" onclick="switchTab('tabConsole')">Console Error 日誌 (<span id="cntConsole">0</span>)</button>
+                    <button class="tab-btn" onclick="switchTab('tabNetwork')">Network HTTP 異常 (<span id="cntNetwork">0</span>)</button>
+                </div>
+                <div id="tabConsole" class="tab-content">
+                    <div class="log-line info">系統就緒。監控中心已開啟...</div>
+                </div>
+                <div id="tabNetwork" class="tab-content" style="display: none;">
+                    <div class="log-line info">尚無失敗的 4xx/5xx 網路請求記錄。</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
